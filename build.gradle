@@ -1,0 +1,118 @@
+plugins {
+    id 'java'
+    id 'idea'
+    id 'io.qameta.allure' version '2.7.0'
+    id 'io.franzbecker.gradle-lombok' version '2.1'
+    id 'com.diffplug.gradle.spotless' version '3.21.1'
+}
+
+group 'com.framework'
+version "${version}"
+
+sourceCompatibility = 1.8
+
+repositories {
+    mavenCentral()
+}
+
+spotless {
+    def importOrderConfigFile = rootProject.file("src/eclipse/spotless.importorder")
+    def javaFormatterConfigFile = rootProject.file("src/eclipse/spotless.eclipseformat.xml")
+
+    java {
+        importOrderFile(importOrderConfigFile)
+        eclipse().configFile(javaFormatterConfigFile)
+        removeUnusedImports()
+        trimTrailingWhitespace()
+        endWithNewline()
+    }
+}
+
+allure {
+    version = '2.8.1'
+    downloadLinkFormat = 'https://dl.bintray.com/qameta/maven/io/qameta/allure/allure-commandline/%s/allure-commandline-%<s.zip'
+    useJUnit5 {
+        version = '2.8.1'
+    }
+    autoconfigure = false
+    aspectjweaver = true
+    aspectjVersion = "${aspectj_version}"
+}
+
+dependencies {
+    testImplementation("org.junit.jupiter:junit-jupiter:${junit_jupiter_version}")
+    testImplementation("org.assertj:assertj-core:${assertj_version}")
+    implementation "com.codeborne:selenide:${selenide_version}"
+    testImplementation("io.qameta.allure:allure-selenide:${allure_selenide_version}")
+    implementation("io.qameta.allure:allure-junit5:${allure_junit_version}")
+    testImplementation "com.tngtech.archunit:archunit:${archunit_version}"
+}
+
+test {
+    useJUnitPlatform()
+    testLogging {
+        events "passed", "skipped", "failed"
+    }
+    
+    systemProperties System.getProperties()
+    def profile = (project.hasProperty('profile') ? project.getProperty('profile') : 'test')
+    systemProperty "profile", profile
+    println "profile = $profile"
+    
+    if (System.properties["test.on"] != null && System.properties["test.on"] == "grid") {
+        systemProperties['junit.jupiter.execution.parallel.enabled'] = true
+        systemProperties['junit.jupiter.execution.parallel.mode.default'] = "concurrent"
+        /*
+        There is issue with parallel tests https://travis-ci.org/MaximVer/Framework/builds/515905649 
+        If this issue repeats, try to fix it with one of the following approaches:
+        1 - Downgrade gradle version to 5.0 with following command `gradle wrapper --gradle-version 5.0`
+        2 - Change or remove junit.jupiter.execution.parallel.mode.default
+        3 - If nothing works add these 2 lines in here:
+            maxParallelForks = Runtime.runtime.availableProcessors().intdiv(2) ?: 1
+            forkEvery = 1
+        */
+    }
+}
+
+task chrome(type: Test) {
+    systemProperties['test.local.browser'] = 'chrome'
+    systemProperties['test.grid.browser'] = 'chrome'
+    systemProperties['selenide.reportsFolder'] = 'build/reports/tests/chrome'
+    useJUnitPlatform {
+        includeTags 'chrome'
+    }
+}
+
+task firefox(type: Test) {
+    systemProperties['test.local.browser'] = 'firefox'
+    systemProperties['test.grid.browser'] = 'firefox'
+    systemProperties['selenide.reportsFolder'] = 'build/reports/tests/firefox'
+    useJUnitPlatform {
+        includeTags 'firefox'
+    }
+}
+
+task chromeMobile(type: Test) {
+    systemProperties['test.local.browser'] = 'chrome_mobile'
+    systemProperties['test.grid.browser'] = 'chrome_mobile'
+    systemProperties['selenide.reportsFolder'] = 'build/reports/tests/chrome_mobile'
+    useJUnitPlatform {
+        includeTags 'chrome_mobile'
+    }
+}
+
+task allTests(dependsOn: ['clean', 'chrome', 'firefox', 'chromeMobile']) {}
+
+tasks.withType(Test) {
+    testLogging {
+        events "passed", "skipped", "failed"
+    }
+    systemProperties System.getProperties()
+    def profile = (project.hasProperty('profile') ? project.getProperty('profile') : 'test')
+    systemProperty "profile", profile
+
+    if (System.properties["test.on"] != null && System.properties["test.on"] == "grid") {
+        systemProperties['junit.jupiter.execution.parallel.enabled'] = true
+        systemProperties['junit.jupiter.execution.parallel.mode.default'] = "concurrent"
+    }
+}
